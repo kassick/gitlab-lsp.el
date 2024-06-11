@@ -99,6 +99,56 @@
   :tag "Gitlab LSP"
   :link '(url-link "https://gitlab.com/gitlab-org/editor-extensions/gitlab-lsp"))
 
+(defcustom gitlab-lsp-major-modes '(python-mode python-ts-mode)
+  "The major modes for which gitlab-lsp should be used"
+  :type '(repeat symbol)
+  :group 'gitlab-lsp)
+
+(defun gitlab-lsp--client-active-for-mode-p (fname mode)
+  (and gitlab-lsp-enabled (member mode gitlab-lsp-major-modes)))
+
+(defun gitlab-lsp--set-enabled-value (symbol value)
+  (when (not (equal (symbol-value symbol) value))
+    (set symbol value)
+    (if value
+        ;; Restart lsp on all relevant buffers
+        (cl-loop for buf in (buffer-list) do
+                 (with-current-buffer buf
+                   (when (and
+                          ;; Ignore internal buffers
+                          (not (string-prefix-p " " (buffer-name)))
+
+                          ;; Only buffer vising files
+                          (buffer-file-name)
+
+                          ;; only for the modes where we should activate gitlab-lsp for
+                          (gitlab-lsp--client-active-for-mode-p (buffer-file-name)
+                                                                major-mode)
+
+                          ;; only if the client isn't already running
+                          (--none? (lsp-find-workspace it (buffer-file-name)) '(gitab-lsp gitlab-lsp-remote)))
+                     (lsp--warn "Starting gitlab-lsp LSP for mode %S on %s" major-mode (lsp-workspace-root))
+                     (lsp))))
+
+      ;; Globally stop all LSP servers
+      (-when-let* ((session (lsp-session))
+                   (gitlab-lsp-workspaces (--filter
+                                           (member (lsp--client-server-id (lsp--workspace-client it))
+                                                   '(gitlab-lsp gitlab-lsp-remote))
+                                           (lsp--session-workspaces session))))
+
+        (cl-loop for workspace in gitlab-lsp-workspaces do
+                 (lsp--warn "Stopping gitlab-lsp for %s per user request" (lsp--workspace-print workspace))
+                 (with-lsp-workspace workspace (lsp-workspace-restart workspace)))))))
+
+(defcustom gitlab-lsp-enabled t
+  "Weather the server should be started to provide completions"
+  :type 'boolean
+  :group 'gitlab-lsp
+  :set #'gitlab-lsp--set-enabled-value
+  )
+
+
 (defcustom gitlab-lsp-langserver-command-args '("--stdio")
   "Command to start gitlab-langserver."
   :type '(repeat string)
@@ -121,12 +171,6 @@ When this executable is not found, you can stil use
 lsp-install-server to fetch an emacs-local version of the LSP."
   :type 'string
   :group 'gitlab-lsp)
-
-(defcustom gitlab-lsp-major-modes '(python-mode python-ts-mode)
-  "The major modes for which gitlab-lsp should be used"
-  :type '(repeat symbol)
-  :group 'gitlab-lsp)
-
 
 (defconst gitlab-lsp-secrets-item-key "emacs/gitlab-lsp/global")
 
@@ -272,8 +316,7 @@ appears before gitlab-lsp--locate-config-with-secrets.
                                           (cons
                                            (lsp-package-path 'gitlab-lsp)
                                            gitlab-lsp-langserver-command-args)))
-  :activation-fn (lambda (_ mode)
-                   (member mode gitlab-lsp-major-modes))
+  :activation-fn #'gitlab-lsp--client-active-for-mode-p
   :server-id 'gitlab-lsp
   :multi-root nil
   :priority -2
@@ -295,8 +338,7 @@ appears before gitlab-lsp--locate-config-with-secrets.
                                           (cons
                                            (executable-find gitlab-lsp-executable)
                                            gitlab-lsp-langserver-command-args)))
-  :activation-fn (lambda (_ mode)
-                   (member mode gitlab-lsp-major-modes))
+  :activation-fn #'gitlab-lsp--client-active-for-mode-p
   :server-id 'gitlab-lsp-remote
   :multi-root nil
   :priority -2
@@ -326,13 +368,37 @@ appears before gitlab-lsp--locate-config-with-secrets.
   "Completes with gitlab-lsp"
   (interactive)
 
-  (let ((workspace (or (lsp-find-workspace 'gitlab-lsp)
-                       (lsp-find-workspace 'gitlab-lsp-remote)))
+  (let ((workspace (--some (lsp-find-workspace it (buffer-file-name))
+                           '(gitlab-lsp gitlab-lsp-remote)))
         (company--capf-cache nil)
         (lsp-completion-no-cache t))
     (if workspace
         (with-lsp-workspace workspace
           (company-manual-begin))
       (message "No gitlab-lsp active for this workspace"))))
+
+;;;###autoload
+(defun gitlab-lsp-enable ()
+  "Enables gitlab-lsp"
+  (interactive)
+  (setopt gitlab-lsp-enabled t)
+  (message "Server Enabled"))
+
+;;;###autoload
+(defun gitlab-lsp-disable ()
+  "Disables gitlab-lsp"
+  (interactive)
+  (setopt gitlab-lsp-enabled nil)
+  (message "Server Disabled"))
+
+;;;###autoload
+(defun gitlab-lsp-toggle ()
+  "Tottle whether gitlab-lsp is enabled"
+  (interactive)
+
+  (if gitlab-lsp-enabled
+      (gitlab-lsp-disable)
+    (gitlab-lsp-enable)))
+
 
 (provide 'gitlab-lsp)
