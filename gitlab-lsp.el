@@ -19,7 +19,7 @@
 
 ;; Author: Rodrigo Virote Kassick <kassick@gmail.com>
 ;; Version: 0.1
-;; Package-Requires: (lsp-mode secrets s compile dash cl-lib request)
+;; Package-Requires: (lsp-mode secrets s compile dash cl-lib request company)
 ;; Keywords: lsp-mode, generative-ai, code-assistant
 ;; URL: https://github.com/kassick/gitlab-lsp.el
 
@@ -36,6 +36,7 @@
 (require 'compile)
 (require 'dash)
 (require 'request)
+(require 'company)
 
 (cl-defun lsp--npm-custom-registry-dependency-install (callback error-callback &key package registry-name registry-url &allow-other-keys)
   "Same as lsp--npm-dependency-install, but accepts a `:registry-url' keyword to use as private registry when installing."
@@ -401,5 +402,25 @@ appears before gitlab-lsp--locate-config-with-secrets.
       (gitlab-lsp-disable)
     (gitlab-lsp-enable)))
 
+
+;; (defun gitlab-lsp--around-with-spinner (fn &rest args)
+;;   (let (s)
+;;     (unwind-protect
+;;         (progn
+;;           (setq s (spinner-start 'progress-bar 10))
+;;           (message "spinner started")
+;;           (apply fn args))
+;;       (spinner-stop s)
+;;       (spinner-stop)
+;;       (message "spinner stopped")
+;;       (advice-remove 'lsp-request-while-no-input #'gitlab-lsp--around-with-spinner))))
+
+;; (advice-add 'lsp-completion-at-point :around (lambda (fn &rest args)
+;;                                                (unwind-protect
+;;                                                    (progn
+;;                                                      (message "advising")
+;;                                                      (advice-add 'lsp-request-while-no-input :around #'gitlab-lsp--around-with-spinner)
+;;                                                      (apply fn args))
+;;                                                  (message "end of completion-at-point"))))
 
 (provide 'gitlab-lsp)
