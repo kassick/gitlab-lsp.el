@@ -108,7 +108,8 @@
   (and gitlab-lsp-enabled (member mode gitlab-lsp-major-modes)))
 
 (defun gitlab-lsp--set-enabled-value (symbol value)
-  (when (not (equal (symbol-value symbol) value))
+  (when (not (and (boundp symbol)
+                  (equal (symbol-value symbol) value)))
     (set symbol value)
     (if value
         ;; Restart lsp on all relevant buffers
@@ -274,14 +275,14 @@ appears before gitlab-lsp--locate-config-with-secrets.
     (display-warning 'gitlab-lsp message :error)
     (lsp--error message)))
 
-(defun kzk/around-lsp--start-workspace (fn &rest args)
+(defun gitlab-lsp--around-lsp--start-workspace (fn &rest args)
   "Ensure we do not use the build time in the client id"
 
   ;; Gitlab LSP will use the client id as part of the headers -- and headers can not contain newlines and stuff
   (let ((emacs-build-time nil))
     (apply fn args)))
 
-(advice-add 'lsp--start-workspace :around #'kzk/around-lsp--start-workspace)
+(advice-add 'lsp--start-workspace :around #'gitlab-lsp--around-lsp--start-workspace)
 
 
 (defun gitlab-lsp--server-initialization-options ()
