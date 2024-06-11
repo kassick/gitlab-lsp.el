@@ -321,4 +321,18 @@ appears before gitlab-lsp--locate-config-with-secrets.
 
   nil)
 
+;;;###autoload
+(defun gitlab-lsp-complete ()
+  "Completes with gitlab-lsp"
+  (interactive)
+
+  (let ((workspace (or (lsp-find-workspace 'gitlab-lsp)
+                       (lsp-find-workspace 'gitlab-lsp-remote)))
+        (company--capf-cache nil)
+        (lsp-completion-no-cache t))
+    (if workspace
+        (with-lsp-workspace workspace
+          (company-manual-begin))
+      (message "No gitlab-lsp active for this workspace"))))
+
 (provide 'gitlab-lsp)
