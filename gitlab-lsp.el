@@ -475,25 +475,4 @@ appears before gitlab-lsp--locate-config-with-secrets.
       (gitlab-lsp-disable)
     (gitlab-lsp-enable)))
 
-
-;; (defun gitlab-lsp--around-with-spinner (fn &rest args)
-;;   (let (s)
-;;     (unwind-protect
-;;         (progn
-;;           (setq s (spinner-start 'progress-bar 10))
-;;           (message "spinner started")
-;;           (apply fn args))
-;;       (spinner-stop s)
-;;       (spinner-stop)
-;;       (message "spinner stopped")
-;;       (advice-remove 'lsp-request-while-no-input #'gitlab-lsp--around-with-spinner))))
-
-;; (advice-add 'lsp-completion-at-point :around (lambda (fn &rest args)
-;;                                                (unwind-protect
-;;                                                    (progn
-;;                                                      (message "advising")
-;;                                                      (advice-add 'lsp-request-while-no-input :around #'gitlab-lsp--around-with-spinner)
-;;                                                      (apply fn args))
-;;                                                  (message "end of completion-at-point"))))
-
 (provide 'gitlab-lsp)
