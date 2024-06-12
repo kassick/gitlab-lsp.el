@@ -84,6 +84,7 @@ Type your prompt and then either trigger company-mode completion (or wait on the
 ## Known issues / limitations:
 
 1.  _Completion is slow_ -- yeah, the LSP server may take a while to complete. You may have to customize `lsp-response-timeout`.
-2.  _I only get no completions found_ -- make sure your lsp server has started correctly -- check the `*gitlab-lsp::stderr*` buffer and make sure that you see a `Token is valid` message.
-3.  _The single candidate appears as a very long line_ / _The completion list obscures the code snippet to be inserted_-- That's because `company-mode` is using the same UI for candidates and standard completions. This is a _frontend_ issue, to be solved elsewhere.
-4.  _How can I manually trigger only gitlab-lsp_ -- No idea still, working on it...
+2.  _Now my other completions from (insert other LSP server here) take forever to show_ -- Yeah, the tooltip may be delayed until gitlab-lsp has returned results. You can `(setopt gitlab-lsp-show-completions-with-other-clients nil)` and bind `gitlab-lsp-complete`. This way, your standard, semantic completions work as expected, and you can still ask for code suggestions.
+3.  _How can I manually trigger only gitlab-lsp_ -- use `gitlab-lsp-complete`
+4.  _I only get no completions found_ -- make sure your lsp server has started correctly -- check the `*gitlab-lsp::stderr*` buffer and make sure that you see a `Token is valid` message.
+5.  _The single candidate appears as a very long line_ / _The completion list obscures the code snippet to be inserted_-- That's because `company-mode` is using the same UI for candidates and standard completions. This is a _frontend_ issue, to be solved elsewhere.

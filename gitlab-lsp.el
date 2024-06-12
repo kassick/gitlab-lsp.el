@@ -108,6 +108,13 @@
 (defun gitlab-lsp--client-active-for-mode-p (fname mode)
   (and gitlab-lsp-enabled (member mode gitlab-lsp-major-modes)))
 
+(defun gitlab-lsp--find-active-workspaces ()
+  "Returns a list of gitlab-lsp workspaces"
+  (-some->> (lsp-session)
+    (lsp--session-workspaces)
+    (--filter (member (lsp--client-server-id (lsp--workspace-client it))
+                      '(gitlab-lsp gitlab-lsp-remote)))))
+
 (defun gitlab-lsp--set-enabled-value (symbol value)
   (when (not (and (boundp symbol)
                   (equal (symbol-value symbol) value)))
@@ -133,23 +140,50 @@
                      (lsp))))
 
       ;; Globally stop all LSP servers
-      (-when-let* ((session (lsp-session))
-                   (gitlab-lsp-workspaces (--filter
-                                           (member (lsp--client-server-id (lsp--workspace-client it))
-                                                   '(gitlab-lsp gitlab-lsp-remote))
-                                           (lsp--session-workspaces session))))
-
-        (cl-loop for workspace in gitlab-lsp-workspaces do
-                 (lsp--warn "Stopping gitlab-lsp for %s per user request" (lsp--workspace-print workspace))
-                 (with-lsp-workspace workspace (lsp-workspace-restart workspace)))))))
+      (cl-loop for workspace in (gitlab-lsp--find-active-workspaces) do
+               (lsp--warn "Stopping gitlab-lsp for %s per user request" (lsp--workspace-print workspace))
+               (with-lsp-workspace workspace (lsp-workspace-restart workspace))))))
 
 (defcustom gitlab-lsp-enabled t
-  "Weather the server should be started to provide completions"
+  "Whether the server should be started to provide completions.
+This setting should be set with setopt or via customize.
+
+(setopt gitlab-lsp-enabled t)"
   :type 'boolean
   :group 'gitlab-lsp
-  :set #'gitlab-lsp--set-enabled-value
-  )
+  :set #'gitlab-lsp--set-enabled-value)
 
+
+(defun gitlab-lsp--disable-capf-completions-for-workspace (workspace &optional quiet)
+  (or quiet
+      (lsp--warn "Disabling gitlab-lsp capf completions for workspace %s" (lsp--workspace-print workspace)) )
+  (ht-remove (lsp--workspace-server-capabilities workspace) "completionProvider"))
+
+(defun gitlab-lsp--enable-capf-completions-for-workspace (workspace &optional quiet)
+  (or quiet
+      (lsp--warn "Enabling gitlab-lsp capf completions for workspace %s" (lsp--workspace-print workspace)))
+
+  (let ((cap-ht (lsp--workspace-server-capabilities workspace)))
+    (ht-set cap-ht "completionProvider" (ht-get cap-ht "--completionProvider"))))
+
+(defun gitlab-lsp--set-completions-in-capf-value (symbol value)
+  (set symbol value)
+
+  (cl-loop for workspace in (gitlab-lsp--find-active-workspaces) do
+           (if value
+               (gitlab-lsp--enable-capf-completions-for-workspace workspace)
+             (gitlab-lsp--disable-capf-completions-for-workspace workspace))))
+
+(defcustom gitlab-lsp-show-completions-with-other-clients t
+  "Whether gitlab-lsp will provide completions along with other LSP clients.
+This can improve performance for standard code completion.
+
+This settings should be updated with setopt or via customize
+
+(setopt gitlab-lsp-show-completions-with-other-clients nil)"
+  :type 'boolean
+  :group 'gitlab-lsp
+  :set #'gitlab-lsp--set-completions-in-capf-value)
 
 (defcustom gitlab-lsp-langserver-command-args '("--stdio")
   "Command to start gitlab-langserver."
@@ -299,7 +333,19 @@ appears before gitlab-lsp--locate-config-with-secrets.
           ;; prefix...
           (config-ht (ht-get (lsp-configuration-section "gitlab-lsp")
                              "gitlab-lsp"))
-          ((baseUrl . token) (gitlab-lsp-locate-config)))
+
+          ;; Use stored or prompt interactively, according to config
+          ((baseUrl . token) (gitlab-lsp-locate-config))
+
+          ;; Find the completionProvider capability of this server
+          (completionProviderCap (ht-get (lsp--workspace-server-capabilities workspace)
+                                         "completionProvider")))
+
+    ;; Backup the completionProvider capability values for this workspace
+    (ht-set (lsp--workspace-server-capabilities workspace) "--completionProvider" completionProviderCap)
+
+    (when (not gitlab-lsp-show-completions-with-other-clients)
+      (gitlab-lsp--disable-capf-completions-for-workspace workspace))
 
     ;; Empty string -- let the server use whatever default it wants
     (when (length> (string-trim (or baseUrl "")) 0)
@@ -314,12 +360,12 @@ appears before gitlab-lsp--locate-config-with-secrets.
 ;; Server installed by emacs
 (lsp-register-client
  (make-lsp-client
+  :server-id 'gitlab-lsp
   :new-connection (lsp-stdio-connection (lambda ()
                                           (cons
                                            (lsp-package-path 'gitlab-lsp)
                                            gitlab-lsp-langserver-command-args)))
   :activation-fn #'gitlab-lsp--client-active-for-mode-p
-  :server-id 'gitlab-lsp
   :multi-root nil
   :priority -2
   :add-on? t
@@ -336,12 +382,13 @@ appears before gitlab-lsp--locate-config-with-secrets.
 ;; Server found in PATH
 (lsp-register-client
  (make-lsp-client
+  :server-id 'gitlab-lsp-remote
+  :remote? t
   :new-connection (lsp-stdio-connection (lambda ()
                                           (cons
                                            (executable-find gitlab-lsp-executable)
                                            gitlab-lsp-langserver-command-args)))
   :activation-fn #'gitlab-lsp--client-active-for-mode-p
-  :server-id 'gitlab-lsp-remote
   :multi-root nil
   :priority -2
   :add-on? t
@@ -376,7 +423,14 @@ appears before gitlab-lsp--locate-config-with-secrets.
         (lsp-completion-no-cache t))
     (if workspace
         (with-lsp-workspace workspace
-          (company-manual-begin))
+          (unwind-protect (progn
+                            (when (not gitlab-lsp-show-completions-with-other-clients)
+                              ;; temporary restore the server capabilities
+                              (gitlab-lsp--enable-capf-completions-for-workspace workspace t))
+
+                            (company-manual-begin))
+            (when (not gitlab-lsp-show-completions-with-other-clients)
+              (gitlab-lsp--disable-capf-completions-for-workspace workspace t))))
       (message "No gitlab-lsp active for this workspace"))))
 
 ;;;###autoload
