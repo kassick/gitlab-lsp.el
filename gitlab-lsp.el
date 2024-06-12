@@ -100,7 +100,26 @@
   :tag "Gitlab LSP"
   :link '(url-link "https://gitlab.com/gitlab-org/editor-extensions/gitlab-lsp"))
 
-(defcustom gitlab-lsp-major-modes '(python-mode python-ts-mode)
+(defcustom gitlab-lsp-major-modes '(python-mode
+                                    python-ts-mode
+                                    go-mode
+                                    go-ts-mode
+                                    js-mode
+                                    js-ts-mode
+                                    java-mode
+                                    java-ts-mode
+                                    kotlin-mode
+                                    kotlin-ts-mode
+                                    ruby-mode
+                                    ruby-ts-mode
+                                    rust-mode
+                                    rust-ts-mode
+                                    tsx-ts-mode
+                                    typescript-mode
+                                    typescript-ts-mode
+                                    vue-mode
+                                    yaml-mode
+                                    yaml-ts-mode)
   "The major modes for which gitlab-lsp should be used"
   :type '(repeat symbol)
   :group 'gitlab-lsp)
