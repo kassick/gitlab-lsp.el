@@ -414,8 +414,6 @@ appears before gitlab-lsp--locate-config-with-secrets.
   :completion-in-comments? t
   :initialization-options #'gitlab-lsp--server-initialization-options
   :initialized-fn #'gitlab-lsp--server-initialized-fn
-  :download-server-fn (lambda (_client callback error-callback _update?)
-                        (lsp-package-ensure 'gitlab-lsp callback error-callback))
   :notification-handlers (lsp-ht ("$/gitlab/token/check" 'gitlab-lsp-token-check-callback))
   :action-handlers (lsp-ht
                     ;; This results in a key error, so let's just ignore it ...
