@@ -429,6 +429,38 @@ appears before gitlab-lsp--locate-config-with-secrets.
 
   nil)
 
+(defcustom gitlab-lsp-complete-completion-fn (cond ((symbol-function 'company-manual-begin) 'company-manual-begin)
+                                                   ((symbol-function 'helm-company) 'helm-company)
+                                                   ((symbol-function 'consult-company) 'consult-company)
+                                                   (t 'completion-at-point))
+  "Function to use to trigger completions with gitlab-lsp-complete"
+  :type '(choice
+          (const :tag "Company" company-manual-begin)
+          (const :tag "Helm Company" helm-company)
+          (const :tag "Consult Company" consult-company)
+          (const :tag "Completion At Point" completion-at-point)
+          (function :tag "User Defined"))
+  :group 'gitlab-lsp)
+
+(defvar-local gitlab-lsp-completion-request-succeeded nil
+  "Whether the last suggestion request has succeeded")
+
+(defcustom gitlab-lsp-complete-before-complete-hook nil
+  "Hooks run before calling the completion function"
+  :type 'hook)
+
+(defcustom gitlab-lsp-complete-after-complete-hook nil
+  "Hooks executed after calling the completion function.
+
+Whether a candidate has been selected and or inserted is
+dependent on the `gitlab-lsp-complete-completion-fn'.
+`company-manual-begin', for example, exist after the backends
+have answered. If you use the `before' hook to set variables for
+the frontends, then resetting them in this hook may not have the desired effect.
+
+You can use `gitbab-lsp-completion-request-succeeded' to check if no errors happened."
+  :type 'hook)
+
 ;;;###autoload
 (defun gitlab-lsp-complete ()
   "Completes with gitlab-lsp"
@@ -438,6 +470,8 @@ appears before gitlab-lsp--locate-config-with-secrets.
                            '(gitlab-lsp gitlab-lsp-remote)))
         (company--capf-cache nil)
         (lsp-completion-no-cache t))
+
+    (setq gitlab-lsp-completion-request-succeeded nil)
     (if workspace
         (with-lsp-workspace workspace
           (unwind-protect (progn
@@ -445,9 +479,14 @@ appears before gitlab-lsp--locate-config-with-secrets.
                               ;; temporary restore the server capabilities
                               (gitlab-lsp--enable-capf-completions-for-workspace workspace t))
 
-                            (company-manual-begin))
+                            (run-hooks 'gitlab-lsp-complete-before-complete-hook)
+                            (apply gitlab-lsp-complete-completion-fn '())
+                            (setq gitlab-lsp-completion-request-succeeded t))
+
             (when (not gitlab-lsp-show-completions-with-other-clients)
-              (gitlab-lsp--disable-capf-completions-for-workspace workspace t))))
+              (gitlab-lsp--disable-capf-completions-for-workspace workspace t))
+            (run-hooks 'gitlab-lsp-complete-after-complete-hook)
+            (setq gitlab-lsp-completion-request-succeeded nil)))
       (message "No gitlab-lsp active for this workspace"))))
 
 ;;;###autoload
